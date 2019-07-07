@@ -1,18 +1,17 @@
  // Param values from https://developer.mozilla.org/Add-ons/WebExtensions/API/contextualIdentities/create
-const TWITTER_CONTAINER_NAME = "Twitter";
-const TWITTER_CONTAINER_COLOR = "blue";
-const TWITTER_CONTAINER_ICON = "briefcase";
-const TWITTER_DOMAINS = ["twitter.com", "www.twitter.com", "t.co", "twimg.com", "mobile.twitter.com", "m.twitter.com",
-                         "api.twitter.com", "abs.twimg.com", "ton.twimg.com", "pbs.twimg.com", "tweetdeck.twitter.com"];
+const TUMBLR_CONTAINER_NAME = "Tumblr";
+const TUMBLR_CONTAINER_COLOR = "turquoise";
+const TUMBLR_CONTAINER_ICON = "briefcase";
+const TUMBLR_DOMAINS = ["tumblr.com", "www.tumblr.com", "assets.tumblr.com", "media.tumblr.com", "66.media.tumblr.com","srvcs.tumblr.com", "px.srvcs.tumblr.com", "txmblr.com", "safe.txmblr.com"];
 
 const MAC_ADDON_ID = "@testpilot-containers";
 
 let macAddonEnabled = false;
-let twitterCookieStoreId = null;
-let twitterCookiesCleared = false;
+let tumblrCookieStoreId = null;
+let tumblrCookiesCleared = false;
 
 const canceledRequests = {};
-const twitterHostREs = [];
+const tumblrHostREs = [];
 
 async function isMACAddonEnabled () {
   try {
@@ -104,37 +103,37 @@ function shouldCancelEarly (tab, options) {
   return false;
 }
 
-function generateTwitterHostREs () {
-  for (let twitterDomain of TWITTER_DOMAINS) {
-    twitterHostREs.push(new RegExp(`^(.*\\.)?${twitterDomain}$`));
+function generateTumblrHostREs () {
+  for (let tumblrDomain of TUMBLR_DOMAINS) {
+    tumblrHostREs.push(new RegExp(`^(.*\\.)?${tumblrDomain}$`));
   }
 }
 
-async function clearTwitterCookies () {
-  // Clear all twitter cookies
+async function clearTumblrCookies () {
+  // Clear all Tumblr cookies
   const containers = await browser.contextualIdentities.query({});
   containers.push({
     cookieStoreId: 'firefox-default'
   });
   containers.map(container => {
     const storeId = container.cookieStoreId;
-    if (storeId === twitterCookieStoreId) {
-      // Don't clear cookies in the Twitter Container
+    if (storeId === tumblrCookieStoreId) {
+      // Don't clear cookies in the Tumblr Container
       return;
     }
 
-    TWITTER_DOMAINS.map(async twitterDomain => {
-      const twitterCookieUrl = `https://${twitterDomain}/`;
+    TUMBLR_DOMAINS.map(async tumblrDomain => {
+      const tumblrCookieUrl = `https://${tumblrDomain}/`;
 
       const cookies = await browser.cookies.getAll({
-        domain: twitterDomain,
+        domain: tumblrDomain,
         storeId
       });
 
       cookies.map(cookie => {
         browser.cookies.remove({
           name: cookie.name,
-          url: twitterCookieUrl,
+          url: tumblrCookieUrl,
           storeId
         });
       });
@@ -143,29 +142,29 @@ async function clearTwitterCookies () {
 }
 
 async function setupContainer () {
-  // Use existing Twitter container, or create one
-  const contexts = await browser.contextualIdentities.query({name: TWITTER_CONTAINER_NAME})
+  // Use existing Tumblr container, or create one
+  const contexts = await browser.contextualIdentities.query({name: TUMBLR_CONTAINER_NAME})
   if (contexts.length > 0) {
-    twitterCookieStoreId = contexts[0].cookieStoreId;
+    tumblrCookieStoreId = contexts[0].cookieStoreId;
   } else {
     const context = await browser.contextualIdentities.create({
-      name: TWITTER_CONTAINER_NAME,
-      color: TWITTER_CONTAINER_COLOR,
-      icon: TWITTER_CONTAINER_ICON
+      name: TUMBLR_CONTAINER_NAME,
+      color: TUMBLR_CONTAINER_COLOR,
+      icon: TUMBLR_CONTAINER_ICON
     })
-    twitterCookieStoreId = context.cookieStoreId;
+    tumblrCookieStoreId = context.cookieStoreId;
   }
 }
 
-async function containTwitter (options) {
-  // Listen to requests and open Twitter into its Container,
+async function containTumblr (options) {
+  // Listen to requests and open Tumblr into its Container,
   // open other sites into the default tab context
   const requestUrl = new URL(options.url);
 
-  let isTwitter = false;
-  for (let twitterHostRE of twitterHostREs) {
-    if (twitterHostRE.test(requestUrl.host)) {
-      isTwitter = true;
+  let isTumblr = false;
+  for (let tumblrHostRE of tumblrHostREs) {
+    if (tumblrHostRE.test(requestUrl.host)) {
+      isTumblr = true;
       break;
     }
   }
@@ -182,17 +181,15 @@ async function containTwitter (options) {
 
   const tab = await browser.tabs.get(options.tabId);
   const tabCookieStoreId = tab.cookieStoreId;
-  if (isTwitter) {
-    if (tabCookieStoreId !== twitterCookieStoreId && !tab.incognito) {
-      // See https://github.com/mozilla/contain-twitter/issues/23
-      // Sometimes this add-on is installed but doesn't get a twitterCookieStoreId ?
-      if (twitterCookieStoreId) {
+  if (isTumblr) {
+    if (tabCookieStoreId !== tumblrCookieStoreId && !tab.incognito) {
+      if (tumblrCookieStoreId) {
         if (shouldCancelEarly(tab, options)) {
           return {cancel: true};
         }
         browser.tabs.create({
           url: requestUrl.toString(),
-          cookieStoreId: twitterCookieStoreId,
+          cookieStoreId: tumblrCookieStoreId,
           active: tab.active,
           index: tab.index,
           windowId: tab.windowId
@@ -202,7 +199,7 @@ async function containTwitter (options) {
       }
     }
   } else {
-    if (tabCookieStoreId === twitterCookieStoreId) {
+    if (tabCookieStoreId === tumblrCookieStoreId) {
       if (shouldCancelEarly(tab, options)) {
         return {cancel: true};
       }
@@ -223,11 +220,11 @@ async function containTwitter (options) {
   macAddonEnabled = await isMACAddonEnabled();
 
   await setupContainer();
-  clearTwitterCookies();
-  generateTwitterHostREs();
+  clearTumblrCookies();
+  generateTumblrHostREs();
 
   // Add the request listener
-  browser.webRequest.onBeforeRequest.addListener(containTwitter, {urls: ["<all_urls>"], types: ["main_frame"]}, ["blocking"]);
+  browser.webRequest.onBeforeRequest.addListener(containTumblr, {urls: ["<all_urls>"], types: ["main_frame"]}, ["blocking"]);
 
   // Clean up canceled requests
   browser.webRequest.onCompleted.addListener((options) => {
